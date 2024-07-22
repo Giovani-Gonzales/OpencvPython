@@ -2,21 +2,40 @@ import pytesseract
 import cv2
 import numpy as np
 
-pytesseract.pytesseract.tesseract_cmd = "C:\\Users\\garaujo\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 
-def desenhaContornos(contornos, imagem):
+# Variável global para armazenar se o clique ocorreu
+clicked = False
+
+def desenhaContornoMaiorArea(contornos, imagem):
+    maior_area = 0
+    melhor_contorno = None
+
     for c in contornos:
-        perimetro = cv2.arcLength(c, True)
-        if perimetro > 120:
-            approx = cv2.approxPolyDP(c, 0.03 * perimetro, True)
-            if len(approx) == 4:
-                (x, y, lar, alt) = cv2.boundingRect(c)
-                cv2.rectangle(imagem, (x, y), (x + lar, y + alt), (0, 255, 0), 2)
-                roi = imagem[y:y + alt, x:x + lar]
-                cv2.imwrite("output/roi.png", roi)
+        area = cv2.contourArea(c)
+        if area > maior_area:
+            maior_area = area
+            melhor_contorno = c
+    
+    if melhor_contorno is not None:
+        perimetro = cv2.arcLength(melhor_contorno, True)
+        approx = cv2.approxPolyDP(melhor_contorno, 0.03 * perimetro, True)
+        if len(approx) == 4:
+            (x, y, lar, alt) = cv2.boundingRect(melhor_contorno)
+            cv2.rectangle(imagem, (x, y), (x + lar, y + alt), (0, 255, 0), 3)
+            roi = imagem[y:y + alt, x:x + lar]
+            cv2.imwrite("output/roi.png", roi)
+
+def onMouseClick(event, x, y, flags, param):
+    global clicked
+    if event == cv2.EVENT_LBUTTONDOWN:
+        clicked = True
 
 def buscaRetanguloPlaca(source):
     video = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+
+    cv2.namedWindow('FRAME')
+    cv2.setMouseCallback('FRAME', onMouseClick)
 
     while video.isOpened():
         ret, frame = video.read()
@@ -50,68 +69,66 @@ def buscaRetanguloPlaca(source):
 
         cv2.imshow('FRAME', frame)
 
-        desenhaContornos(contornos, area)
+        desenhaContornoMaiorArea(contornos, area)
 
         cv2.imshow('RES', area)
+
+        # Verifica se ocorreu um clique na tela
+        if clicked:
+            break
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     video.release()
-    preProcessamentoRoi()
+    preProcessamentoRoi()  # Chamada para processar a ROI após interromper a captura
     cv2.destroyAllWindows()
 
 def preProcessamentoRoi():
+    # Carrega a imagem da ROI
     img_roi = cv2.imread("output/roi.png")
-    cv2.imshow("ENTRADA", img_roi)
     if img_roi is None:
+        print("Erro ao carregar imagem da ROI.")
         return
 
+    # Redimensiona a imagem
     img = cv2.resize(img_roi, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
 
+    # Converte para escala de cinza
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    cv2.imshow("Escala Cinza", img)
 
+    # Aplica limiarização
     _, img = cv2.threshold(img, 70, 255, cv2.THRESH_BINARY)
-    cv2.imshow("Limiar", img)
 
+    # Aplica desfoque gaussiano
     img = cv2.GaussianBlur(img, (5, 5), 0)
-    cv2.imshow("Desfoque", img)
 
-    # Realce de bordas
-    edges = cv2.Canny(img, 100, 200)
-    cv2.imshow("Bordas", edges)
-
-    # Ajuste de contraste e brilho
-    alpha = 1 # Contraste
-    beta = 100   # Brilho
-    img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
-    cv2.imshow("Contraste e Brilho", img)
-
+    # Salva a imagem processada para OCR
     cv2.imwrite("output/roi-ocr.png", img)
 
     return img
 
 def reconhecimentoOCR():
+    # Carrega a imagem processada para OCR
     img_roi_ocr = cv2.imread("output/roi-ocr.png")
     if img_roi_ocr is None:
+        print("Erro ao carregar imagem para OCR.")
         return
 
+    # Configuração para o Tesseract
     config = r'-c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 --psm 6'
+    
+    # Realiza OCR na imagem e exibe o resultado
     saida = pytesseract.image_to_string(img_roi_ocr, lang='eng', config=config)
-
-    # Verificar por dois dígitos iguais seguidos
-    for i in range(len(saida) - 1):
-        if saida[i] == saida[i + 1]:
-            print(f"Dois dígitos iguais seguidos encontrados: {saida[i]}{saida[i + 1]}")
-            break
-
-    print(saida)
-    return saida
+    
+    # Limita o resultado para 7 caracteres
+    resultado_limitado = saida[:7]
+    
+    print(resultado_limitado)
+    return resultado_limitado
 
 if __name__ == "__main__":
     source = 0  # Usar a câmera padrão
 
     buscaRetanguloPlaca(source)
-    preProcessamentoRoi()
     reconhecimentoOCR()
