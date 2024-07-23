@@ -54,12 +54,14 @@ def buscaRetanguloPlaca(source):
         if area.size == 0:
             print("Área recortada está vazia.")
             continue
-        
+
+        # Processamento da área para melhorar visualização
         img_result = cv2.cvtColor(area, cv2.COLOR_BGR2GRAY)
-
-        ret, img_result = cv2.threshold(img_result, 90, 255, cv2.THRESH_BINARY)
-
+        _, img_result = cv2.threshold(img_result, 90, 255, cv2.THRESH_BINARY)
         img_result = cv2.GaussianBlur(img_result, (5, 5), 0)
+
+        # Exibe a área processada na janela 'FRAME'
+        cv2.imshow('FRAME', img_result)
 
         contornos, hier = cv2.findContours(img_result, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
@@ -67,11 +69,9 @@ def buscaRetanguloPlaca(source):
         cv2.line(frame, (top_left_x, 0), (top_left_x, height), (0, 0, 255), 1)
         cv2.line(frame, (bottom_right_x, 0), (bottom_right_x, height), (0, 0, 255), 1)
 
-        cv2.imshow('FRAME', frame)
-
         desenhaContornoMaiorArea(contornos, area)
 
-        cv2.imshow('RES', area)
+        cv2.imshow('RES', frame)  # Exibe a imagem original com o contorno desenhado
 
         # Verifica se ocorreu um clique na tela
         if clicked:
@@ -128,7 +128,7 @@ def reconhecimentoOCR():
     return resultado_limitado
 
 if __name__ == "__main__":
-    source = 0  # Usar a câmera padrão
+    source = 1  # Usar a câmera padrão
 
     buscaRetanguloPlaca(source)
     reconhecimentoOCR()

@@ -3,7 +3,7 @@ import cv2
 video_src = 'resource/video480.avi'
 
 cap = cv2.VideoCapture(video_src)
-plate_cascade = cv2.CascadeClassifier('cascades/haarcascade_licence_plate_rus_16stages.xml')
+plate_cascade = cv2.CascadeClassifier('C:\\Users\\admin\\Documents\\GitHub\\OpencvPython\\cascades\\haarcascade_license_plate_rus_16stages.xml')
 
 while True:
     ret, img = cap.read()
