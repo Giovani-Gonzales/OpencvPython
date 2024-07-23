@@ -1,8 +1,9 @@
-import pytesseract
 import cv2
 import numpy as np
+import pytesseract
 
-pytesseract.pytesseract.tesseract_cmd = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+# Configuração do Tesseract
+pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
 
 # Variável global para armazenar se o clique ocorreu
 clicked = False
@@ -31,8 +32,9 @@ def onMouseClick(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
         clicked = True
 
-def buscaRetanguloPlaca(source):
+def buscaRetanguloPlaca(source, cascade_path):
     video = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+    plate_cascade = cv2.CascadeClassifier(cascade_path)
 
     cv2.namedWindow('FRAME')
     cv2.setMouseCallback('FRAME', onMouseClick)
@@ -43,6 +45,12 @@ def buscaRetanguloPlaca(source):
         if not ret or frame is None:
             print("Falha ao capturar frame da câmera.")
             break
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        plates = plate_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+
+        for (x, y, w, h) in plates:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         height, width = frame.shape[:2]
         top_left_x = int(width * 0.25)
@@ -58,6 +66,8 @@ def buscaRetanguloPlaca(source):
         # Processamento da área para melhorar visualização
         img_result = cv2.cvtColor(area, cv2.COLOR_BGR2GRAY)
         _, img_result = cv2.threshold(img_result, 90, 255, cv2.THRESH_BINARY)
+
+        # Aplica suavização gaussiana
         img_result = cv2.GaussianBlur(img_result, (5, 5), 0)
 
         # Exibe a área processada na janela 'FRAME'
@@ -100,8 +110,10 @@ def preProcessamentoRoi():
     # Aplica limiarização
     _, img = cv2.threshold(img, 70, 255, cv2.THRESH_BINARY)
 
-    # Aplica desfoque gaussiano
+    # Aplica suavização gaussiana
     img = cv2.GaussianBlur(img, (5, 5), 0)
+
+    #img = cv2.bitwise_not(img)
 
     # Salva a imagem processada para OCR
     cv2.imwrite("output/roi-ocr.png", img)
@@ -129,6 +141,7 @@ def reconhecimentoOCR():
 
 if __name__ == "__main__":
     source = 1  # Usar a câmera padrão
+    cascade_path = 'C:\\Users\\admin\\Documents\\GitHub\\OpencvPython\\cascades\\haarcascade_license_plate_rus_16stages.xml'
 
-    buscaRetanguloPlaca(source)
+    buscaRetanguloPlaca(source, cascade_path)
     reconhecimentoOCR()
