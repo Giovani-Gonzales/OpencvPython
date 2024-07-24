@@ -57,8 +57,12 @@ def buscaRetanguloPlaca(source):
 
         # Processamento da área para melhorar visualização
         img_result = cv2.cvtColor(area, cv2.COLOR_BGR2GRAY)
-        _, img_result = cv2.threshold(img_result, 90, 255, cv2.THRESH_BINARY)
+        _, img_result = cv2.adaptiveThreshold(img_result, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
         img_result = cv2.GaussianBlur(img_result, (5, 5), 0)
+        img_result = cv2.convertScaleAbs(img_result, alpha=1.5, beta=0)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        img_result = cv2.morphologyEx(img_result, cv2.MORPH_CLOSE, kernel)
+
 
         # Exibe a área processada na janela 'FRAME'
         cv2.imshow('FRAME', img_result)
@@ -97,16 +101,24 @@ def preProcessamentoRoi():
     # Converte para escala de cinza
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # Aplica limiarização
-    _, img = cv2.threshold(img, 70, 255, cv2.THRESH_BINARY)
+    # Ajusta contraste e brilho
+    img = cv2.convertScaleAbs(img, alpha=1.5, beta=0)
+
+    # Aplica limiarização adaptativa
+    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
 
     # Aplica desfoque gaussiano
     img = cv2.GaussianBlur(img, (5, 5), 0)
+
+    # Operações morfológicas
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
 
     # Salva a imagem processada para OCR
     cv2.imwrite("output/roi-ocr.png", img)
 
     return img
+
 
 def reconhecimentoOCR():
     # Carrega a imagem processada para OCR
