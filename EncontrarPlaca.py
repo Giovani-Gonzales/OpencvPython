@@ -101,19 +101,13 @@ def preProcessamentoRoi():
         print("Erro ao carregar imagem da ROI.")
         return
 
-    # Redimensiona a imagem
     img = cv2.resize(img_roi, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
-
-    # Converte para escala de cinza
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Aplica limiarização
-    _, img = cv2.threshold(img, 70, 255, cv2.THRESH_BINARY)
-
-    # Aplica suavização gaussiana
+    img = cv2.convertScaleAbs(img, alpha=1.5, beta=0)
+    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     img = cv2.GaussianBlur(img, (5, 5), 0)
-
-    #img = cv2.bitwise_not(img)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
 
     # Salva a imagem processada para OCR
     cv2.imwrite("output/roi-ocr.png", img)
