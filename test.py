@@ -65,13 +65,7 @@ def buscaRetanguloPlaca(source, cascade_path):
 
         # Processamento da área para melhorar visualização
         img_result = cv2.cvtColor(area, cv2.COLOR_BGR2GRAY)
-        img_result = cv2.convertScaleAbs(img_result, alpha=1.5, beta=0)
-        img_result = cv2.adaptiveThreshold(img_result, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-        img_result = cv2.GaussianBlur(img_result, (5, 5), 0)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        img_result = cv2.morphologyEx(img_result, cv2.MORPH_CLOSE, kernel)
-        img_result = cv2.GaussianBlur(img_result, (5, 5), 0)
-        
+        _, img_result = cv2.threshold(img_result, 90, 255, cv2.THRESH_BINARY)
 
         # Aplica suavização gaussiana
         img_result = cv2.GaussianBlur(img_result, (5, 5), 0)
@@ -107,18 +101,15 @@ def preProcessamentoRoi():
         print("Erro ao carregar imagem da ROI.")
         return
 
-    img = cv2.resize(img_roi, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    img = cv2.convertScaleAbs(img, alpha=1.5, beta=0)
-    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    img = cv2.GaussianBlur(img, (5, 5), 0)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
 
-    # Preenchimento dos caracteres
-    kernel_fill = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-    img = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel_fill)
-    
+    img = cv2.resize(img_roi, None, fx=4, fy=4, interpolation=cv2.INTER_CUBIC)
+    # Processamento da área para melhorar visualização
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, img = cv2.threshold(img, 90, 255, cv2.THRESH_BINARY)
+
+    # Aplica suavização gaussiana
+    img = cv2.GaussianBlur(img, (5, 5), 0)
+
     # Salva a imagem processada para OCR
     cv2.imwrite("output/roi-ocr.png", img)
 

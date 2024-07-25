@@ -4,24 +4,9 @@ from PIL import Image, ImageTk
 import customtkinter as ctk
 from tkinter import Label
 import pandas as pd
-import difflib
-import time
-from comtypes.client import CreateObject
 
-class PyE3DataAccess(object):
-    def __init__(self, server='localhost'):
-        super(PyE3DataAccess, self).__init__()
-        self._engine = CreateObject("{80327130-FFDB-4506-B160-B9F8DB32DFB2}")
-        self._engine.Server = server
-
-    def lerValorE3(self, pathname):
-        return self._engine.ReadValue(pathname)
-    
-    def escreverValorE3(self, pathname, date, quality, value):
-        return self._engine.WriteValue(pathname, date, quality, value)
-
-# Carregar os dados
 df = pd.read_csv('dados.csv')
+
 
 # Configuração do Tesseract
 pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
@@ -41,16 +26,10 @@ class WebcamApp(ctk.CTk):
         self.resultado_label = ctk.CTkLabel(self, text="", font=("Arial", 20))
         self.resultado_label.pack(pady=20)
 
-        # Botões
-        self.btn_concluir = ctk.CTkButton(self, text="Consultar Placa de identificação veicular", command=self.concluir)
-        self.btn_confirmar = ctk.CTkButton(self, text="Concluir Consulta", command=self.liberado, state='disabled')
+        self.btn = ctk.CTkButton(self, text="Concluir", command=self.concluir)
+        self.btn.pack(pady=10, padx=10)
 
-        # Adiciona os botões à interface, mas os esconde inicialmente
-        self.btn_confirmar.pack_forget()
-        self.btn_concluir.pack(pady=10, padx=10)
-
-        # Inicializa a câmera
-        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         if not self.cap.isOpened():
@@ -92,21 +71,11 @@ class WebcamApp(ctk.CTk):
         # Converte para escala de cinza
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # Aplica o limiar binário com um valor fixo
-        _, img = cv2.threshold(img, 90, 255, cv2.THRESH_BINARY)
+        # Aplica limiarização
+        _, img = cv2.threshold(img, 70, 255, cv2.THRESH_BINARY)
 
-        # Aplica suavização gaussiana
+        # Aplica desfoque gaussiano
         img = cv2.GaussianBlur(img, (5, 5), 0)
-
-        # Ajusta o brilho e o contraste
-        img = cv2.convertScaleAbs(img, alpha=1.5, beta=0)
-
-        # Define o tamanho do elemento estruturante para afinação
-        kernel_size = (3, 3)  # Tamanho maior para afinar mais os caracteres
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
-
-        # Aplica a operação de abertura morfológica para afinar as letras
-        img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
 
         # Salva a imagem processada para OCR
         cv2.imwrite("output/roi-ocr.png", img)
@@ -126,28 +95,11 @@ class WebcamApp(ctk.CTk):
         # Realiza OCR na imagem e exibe o resultado
         saida = pytesseract.image_to_string(img_roi_ocr, lang='eng', config=config)
         
-        # Limita o resultado para 7 caracteres e remove espaços em branco
-        resultado_limitado = saida.strip()[:7]
-
-        return resultado_limitado
-
-    def normalizar_texto(self, texto):
-        substituicoes = {
-            'Q': 'O',
-            '8': 'B',
-            'J': 'I',
-            # Adicione outras substituições conforme necessário
-        }
+        # Limita o resultado para 7 caracteres
+        resultado_limitado = saida[:7]
         
-        texto_normalizado = ''.join(substituicoes.get(c, c) for c in texto)
-        return texto_normalizado
-
-    def placa_proxima(self, placa):
-        placa_normalizada = self.normalizar_texto(placa)
-        for p in self.lista_placas:
-            if difflib.SequenceMatcher(None, placa_normalizada, p).ratio() > 0.8:  # Ajuste o valor de 0.8 conforme necessário
-                return p
-        return None
+        print(resultado_limitado)
+        return resultado_limitado
 
     def update_video(self):
         ret, frame = self.cap.read()
@@ -165,7 +117,7 @@ class WebcamApp(ctk.CTk):
                 _, img_result = cv2.threshold(img_result, 90, 255, cv2.THRESH_BINARY)
                 img_result = cv2.GaussianBlur(img_result, (5, 5), 0)
 
-                contornos, hier = cv2.findContours(img_result, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                contornos, hier = cv2.findContours(img_result, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
                 self.desenhaContornoMaiorArea(contornos, area)
 
             cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
@@ -177,44 +129,33 @@ class WebcamApp(ctk.CTk):
 
     def concluir(self):
         resultado = self.preProcessamentoRoi()
-         # Identificação para a conexão com o elipse
-        pyE3DataAccess = PyE3DataAccess(server="localhost")
-        caminhoTexto = 'Dados.abc1234.value'
-        date = time.strftime("%d-%m-%Y %H:%M:%S", time.gmtime())
-    
-
-        if resultado:
-            placa_encontrada = self.placa_proxima(resultado)
+        index = 0
+        dfResultado = df[['regiao','produto']]
+        if resultado in self.lista_placas:
+            for i in self.lista_placas:
+                if resultado == i:
+                    self.resultado_label.configure(text=f"Resultado OCR: {resultado} \nRegião: {dfResultado.Iloc[index, 'regiao']} \nProduto: {dfResultado.Iloc[index, 'produto']}")
+                    self.btn.configure(text='Confirmar', command=self.liberado)
+                    btn2 = ctk.CTkButton(self, text="Recusar", command=self.recusado)
+                    btn2.pack(pady=10, padx=10)
+                else:
+                    index = index + 1
+        if resultado not in self.lista_placas:
+            self.resultado_label.configure(text=f"Resultado OCR: {resultado} \nDADOS NÃO ENCONTRADOS")
         
-            if placa_encontrada:
-                valorTag = placa_encontrada
-    
-                pyE3DataAccess.escreverValorE3(pathname=caminhoTexto, date=date, quality=192, value = valorTag)
-                dfResultado = df[['regiao', 'produto']]
-                index = self.lista_placas.index(placa_encontrada)
-                self.resultado_label.configure(
-                    text=f"Placa de identificação veicular: {placa_encontrada} \nRegião: {dfResultado.iloc[index]['regiao']} \nProduto: {dfResultado.iloc[index]['produto']}"
-                )
-                
-                # Mostra os botões de confirmar e recusar e desativa o botão concluir
-                self.btn_confirmar.configure(state='normal')
-                self.btn_confirmar.pack(pady=10, padx=10)
-                self.btn_concluir.pack_forget()
-            else:
-                self.resultado_label.configure(text=f"DADOS DA PLACA {resultado} NÃO ENCONTRADOS")
-        else:
-            self.resultado_label.configure(text="Erro ao processar a imagem, tente novamente.")
-
+        if resultado == '':
+            self.resultado_label.configure(text=f"Resultado: DADOS NÃO ENCONTRADOS")
     def liberado(self):
-        self.resultado_label.configure(text="")
-        # Esconde os botões de confirmar e recusar e mostra o botão concluir
-        self.btn_confirmar.pack_forget()
-        self.btn_concluir.pack(pady=10, padx=10)
+        self.resultado_label.configure(text=f"LIBERADO")
 
-
+    def recusado(self):
+        self.resultado_label.configure(text=f"RECUSADO")
     def on_closing(self):
         self.cap.release()
         self.destroy()
+
+    
+
 
 if __name__ == "__main__":
     app = WebcamApp()
