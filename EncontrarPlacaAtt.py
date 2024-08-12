@@ -4,32 +4,60 @@ from PIL import Image, ImageTk
 import customtkinter as ctk
 from tkinter import Label
 import pandas as pd
+import json
+import difflib
+import time
+from comtypes.client import CreateObject
 
-df = pd.read_csv('dados.csv')
+class PyE3DataAccess(object):
+    def __init__(self, server='192.168.10.10'):
+        super(PyE3DataAccess, self).__init__()
+        self._engine = CreateObject("{80327130-FFDB-4506-B160-B9F8DB32DFB2}")
+        self._engine.Server = server
 
+    def lerValorE3(self, pathname):
+        return self._engine.ReadValue(pathname)
+    
+    def escreverValorE3(self, pathname, date, quality, value):
+        return self._engine.WriteValue(pathname, date, quality, value)
+
+
+# Ler o arquivo JSON
+with open("dados.json", 'r', encoding='utf-8') as file:
+    data = json.load(file)
+
+# Transformar o JSON em um DataFrame
+df = pd.DataFrame(data["items"])
 
 # Configuração do Tesseract
-pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
 
 class WebcamApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.lista_placas = list(df['placa'])
+        self.lista_placas = list(df['placa_caminhao'])
 
         self.title("Webcam App")
         self.geometry("1000x800")
+        self.configure(fg_color="#232322")
+        my_image = ctk.CTkImage(dark_image=Image.open("datawake.png"), size=(500, 100))
+        self.image_label = ctk.CTkLabel(self, image=my_image, text="")  # display image with a CTkLabel
+        self.image_label.pack(pady=10, padx=10)
+        
 
         self.video_label = Label(self)
         self.video_label.pack(padx=10, pady=10)
 
         self.resultado_label = ctk.CTkLabel(self, text="", font=("Arial", 20))
-        self.resultado_label.pack(pady=20)
+        self.resultado_label.pack(pady=20, padx=10)
 
-        self.btn = ctk.CTkButton(self, text="Concluir", command=self.concluir)
+        self.btn = ctk.CTkButton(self, text="Concluir", command=self.concluir, fg_color="#FDB913", text_color="black")
         self.btn.pack(pady=10, padx=10)
+        self.btn2 = ctk.CTkButton(self, text="Recusar", command=self.recusado, fg_color="#FDB913", text_color="black")
+    
 
-        self.cap = cv2.VideoCapture(1,cv2.CAP_DSHOW)
+        self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         if not self.cap.isOpened():
@@ -128,35 +156,65 @@ class WebcamApp(ctk.CTk):
         self.after(10, self.update_video)
 
     def concluir(self):
-        resultado = self.preProcessamentoRoi()
-        index = 0
-        dfResultado = df[['regiao','produto']]
-        if resultado in self.lista_placas:
-            for i in self.lista_placas:
-                if resultado == i:
-                    self.resultado_label.configure(text=f"Resultado OCR: {resultado} \nRegião: {dfResultado.Iloc[index, 'regiao']} \nProduto: {dfResultado.Iloc[index, 'produto']}")
-                    self.btn.configure(text='Confirmar', command=self.liberado)
-                    btn2 = ctk.CTkButton(self, text="Recusar", command=self.recusado)
-                    btn2.pack(pady=10, padx=10)
-                else:
-                    index = index + 1
-        if resultado not in self.lista_placas:
-            self.resultado_label.configure(text=f"Resultado OCR: {resultado} \nDADOS NÃO ENCONTRADOS")
+        self.resultado = self.preProcessamentoRoi()
         
-        if resultado == '':
+        index = 0
+        dfResultado = df[['nomefornecedor','descricaoproduto']]
+        produtos = []
+        if self.resultado  in self.lista_placas:
+            for i in self.lista_placas:
+                if self.resultado  == i:
+                    produtos.append(dfResultado.loc[index, 'descricaoproduto'])
+            self.resultado_label.configure(text=f"Resultado OCR: {self.resultado } \nFornecedor: {dfResultado.loc[index, 'nomefornecedor']}")
+            self.btn.configure(text='Confirmar', command=self.liberado)
+            self.btn2.pack(pady=10, padx=10)
+            
+                    
+                    
+                
+                
+        if self.resultado not in self.lista_placas:
+            self.resultado_label.configure(text=f"Resultado OCR: {self.resultado} \nDADOS NÃO ENCONTRADOS")
+
+        if self.resultado  == '':
             self.resultado_label.configure(text=f"Resultado: DADOS NÃO ENCONTRADOS")
     def liberado(self):
         self.resultado_label.configure(text=f"LIBERADO")
+        valorTag = self.resultado 
+
+        # Identificação para a conexão com o elipse
+        pyE3DataAccess = PyE3DataAccess(server="192.168.10.10")
+        caminhocaminhao = 'DdoInspRece.Geral.PlacaCaminhao.value'
+        caminhook = 'DdoInspRece.Geral.OK.value'
+        date = time.strftime("%d-%m-%Y %H:%M:%S", time.gmtime())
+    
+        pyE3DataAccess.escreverValorE3(pathname= caminhocaminhao, date=date, quality=192, value = valorTag)
+        pyE3DataAccess.escreverValorE3(pathname= caminhook, date=date, quality=192, value = True)
+        self.btn2.configure(state='disable')
+        self.btn2.pack_forget()
+        self.btn.configure(text='Voltar para tela inicial', command=self.clear)
 
     def recusado(self):
         self.resultado_label.configure(text=f"RECUSADO")
+        self.btn2.configure(state='disable')
+        self.btn2.pack_forget()
+        self.btn.configure(text='Voltar para tela inicial', command=self.clear)
+
+
+
     def on_closing(self):
         self.cap.release()
         self.destroy()
 
-    
+    def clear(self):
+        self.resultado_label.configure(text=f"")
+        self.btn.configure(text="Concluir", command=self.concluir)
+        self.btn2.configure(state='disable')
+
 
 
 if __name__ == "__main__":
     app = WebcamApp()
     app.mainloop()
+
+
